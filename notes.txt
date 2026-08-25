@@ -1,0 +1,7 @@
+My name is Sahithi.
+
+I am learning Generative AI and Python.
+
+I am currently learning LangChain, RAG, LangGraph, and AI agents.
+
+My goal is to build real AI applications.
