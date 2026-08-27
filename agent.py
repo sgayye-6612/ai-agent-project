@@ -1,9 +1,11 @@
-from typing import TypedDict
+from typing import Annotated, TypedDict
 
 from langchain_ollama import ChatOllama
 from langchain_core.messages import HumanMessage
 from langchain_core.tools import tool
+
 from langgraph.graph import StateGraph, START, END
+from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 
 
@@ -12,11 +14,11 @@ from langgraph.prebuilt import ToolNode
 # ============================================================
 
 class State(TypedDict):
-    messages: list
+    messages: Annotated[list, add_messages]
 
 
 # ============================================================
-# 2. TOOL
+# 2. TOOLS
 # ============================================================
 
 @tool
@@ -25,7 +27,13 @@ def calculator(a: int, b: int) -> int:
     return a + b
 
 
-tools = [calculator]
+@tool
+def multiply(a: int, b: int) -> int:
+    """Multiply two numbers together."""
+    return a * b
+
+
+tools = [calculator, multiply]
 
 
 # ============================================================
@@ -34,7 +42,7 @@ tools = [calculator]
 
 llm = ChatOllama(
     model="llama3.2",
-    temperature=0,
+    temperature=0
 )
 
 llm_with_tools = llm.bind_tools(tools)
@@ -107,10 +115,15 @@ app = graph.compile()
 
 
 # ============================================================
-# 9. RUN
+# 9. USER INPUT
 # ============================================================
 
 user_input = input("You: ")
+
+
+# ============================================================
+# 10. RUN AGENT
+# ============================================================
 
 result = app.invoke(
     {
@@ -122,18 +135,18 @@ result = app.invoke(
 
 
 # ============================================================
-# 10. PRINT RESULT
+# 11. PRINT CONVERSATION
 # ============================================================
 
 print("\n--- Conversation ---")
 
-for message in result["messages"]:
+for i, message in enumerate(result["messages"], 1):
 
-    print(f"\n{message.__class__.__name__}:")
+    print(f"\nMessage {i}")
+    print("Type:", message.__class__.__name__)
 
     if message.content:
-        print(message.content)
+        print("Content:", message.content)
 
     if getattr(message, "tool_calls", None):
-        print("Tool calls:")
-        print(message.tool_calls)
+        print("Tool calls:", message.tool_calls)
