@@ -1,16 +1,23 @@
 from typing import TypedDict
 
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_ollama import ChatOllama
+from langchain_core.messages import HumanMessage
 from langchain_core.tools import tool
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode
 
 
+# ============================================================
+# 1. STATE
+# ============================================================
+
 class State(TypedDict):
     messages: list
 
 
-# ---------- TOOL ----------
+# ============================================================
+# 2. TOOL
+# ============================================================
 
 @tool
 def calculator(a: int, b: int) -> int:
@@ -21,65 +28,57 @@ def calculator(a: int, b: int) -> int:
 tools = [calculator]
 
 
-# ---------- AGENT NODE ----------
+# ============================================================
+# 3. LOCAL LLM
+# ============================================================
+
+llm = ChatOllama(
+    model="llama3.2",
+    temperature=0,
+)
+
+llm_with_tools = llm.bind_tools(tools)
+
+
+# ============================================================
+# 4. AGENT NODE
+# ============================================================
 
 def agent(state: State):
-    message = state["messages"][-1]
 
-    # Simulate the AI deciding to use the calculator
-    if "add" in message.content.lower():
+    response = llm_with_tools.invoke(
+        state["messages"]
+    )
 
-        ai_message = AIMessage(
-            content="I need to use the calculator.",
-            tool_calls=[
-                {
-                    "name": "calculator",
-                    "args": {
-                        "a": 10,
-                        "b": 20
-                    },
-                    "id": "call_1",
-                    "type": "tool_call",
-                }
-            ],
-        )
-
-        return {
-            "messages": [
-                message,
-                ai_message
-            ]
-        }
-
-    # No tool needed
     return {
-        "messages": [
-            message,
-            AIMessage(
-                content="I can answer without using a tool."
-            )
-        ]
+        "messages": [response]
     }
 
 
-# ---------- TOOL NODE ----------
+# ============================================================
+# 5. TOOL NODE
+# ============================================================
 
 tool_node = ToolNode(tools)
 
 
-# ---------- ROUTING ----------
+# ============================================================
+# 6. ROUTING
+# ============================================================
 
 def should_use_tool(state: State):
 
     last_message = state["messages"][-1]
 
-    if isinstance(last_message, AIMessage) and last_message.tool_calls:
+    if last_message.tool_calls:
         return "tools"
 
     return "end"
 
 
-# ---------- GRAPH ----------
+# ============================================================
+# 7. GRAPH
+# ============================================================
 
 graph = StateGraph(State)
 
@@ -94,31 +93,47 @@ graph.add_conditional_edges(
     {
         "tools": "tools",
         "end": END,
-    }
+    },
 )
 
-graph.add_edge("tools", END)
+graph.add_edge("tools", "agent")
 
 
-# ---------- COMPILE ----------
+# ============================================================
+# 8. COMPILE
+# ============================================================
 
 app = graph.compile()
 
 
-# ---------- RUN ----------
+# ============================================================
+# 9. RUN
+# ============================================================
 
 user_input = input("You: ")
 
-result = app.invoke({
-    "messages": [
-        HumanMessage(content=user_input)
-    ]
-})
+result = app.invoke(
+    {
+        "messages": [
+            HumanMessage(content=user_input)
+        ]
+    }
+)
 
 
-# ---------- PRINT MESSAGES ----------
+# ============================================================
+# 10. PRINT RESULT
+# ============================================================
 
 print("\n--- Conversation ---")
 
 for message in result["messages"]:
-    print(message)
+
+    print(f"\n{message.__class__.__name__}:")
+
+    if message.content:
+        print(message.content)
+
+    if getattr(message, "tool_calls", None):
+        print("Tool calls:")
+        print(message.tool_calls)
