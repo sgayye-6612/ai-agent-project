@@ -1,71 +1,124 @@
 from typing import TypedDict
+
+from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.tools import tool
 from langgraph.graph import StateGraph, START, END
+from langgraph.prebuilt import ToolNode
 
 
 class State(TypedDict):
-    message: str
-    result: int | None
+    messages: list
 
 
-# ----- TOOL -----
+# ---------- TOOL ----------
 
+@tool
 def calculator(a: int, b: int) -> int:
+    """Add two numbers together."""
     return a + b
 
 
-# ----- NODES -----
+tools = [calculator]
 
-def agent_node(state: State):
-    message = state["message"].lower()
 
-    # Simulate the LLM deciding to use a tool
-    if "add" in message or "calculate" in message:
+# ---------- AGENT NODE ----------
+
+def agent(state: State):
+    message = state["messages"][-1]
+
+    # Simulate the AI deciding to use the calculator
+    if "add" in message.content.lower():
+
+        ai_message = AIMessage(
+            content="I need to use the calculator.",
+            tool_calls=[
+                {
+                    "name": "calculator",
+                    "args": {
+                        "a": 10,
+                        "b": 20
+                    },
+                    "id": "call_1",
+                    "type": "tool_call",
+                }
+            ],
+        )
+
         return {
-            "message": message,
-            "result": calculator(10, 20)
+            "messages": [
+                message,
+                ai_message
+            ]
         }
 
+    # No tool needed
     return {
-        "message": message,
-        "result": None
+        "messages": [
+            message,
+            AIMessage(
+                content="I can answer without using a tool."
+            )
+        ]
     }
 
 
-def response_node(state: State):
+# ---------- TOOL NODE ----------
 
-    if state["result"] is not None:
-        return {
-            "message": f"The answer is {state['result']}",
-            "result": state["result"]
-        }
-
-    return {
-        "message": f"I received: {state['message']}",
-        "result": None
-    }
+tool_node = ToolNode(tools)
 
 
-# ----- GRAPH -----
+# ---------- ROUTING ----------
+
+def should_use_tool(state: State):
+
+    last_message = state["messages"][-1]
+
+    if isinstance(last_message, AIMessage) and last_message.tool_calls:
+        return "tools"
+
+    return "end"
+
+
+# ---------- GRAPH ----------
 
 graph = StateGraph(State)
 
-graph.add_node("agent", agent_node)
-graph.add_node("response", response_node)
+graph.add_node("agent", agent)
+graph.add_node("tools", tool_node)
 
 graph.add_edge(START, "agent")
-graph.add_edge("agent", "response")
-graph.add_edge("response", END)
+
+graph.add_conditional_edges(
+    "agent",
+    should_use_tool,
+    {
+        "tools": "tools",
+        "end": END,
+    }
+)
+
+graph.add_edge("tools", END)
+
+
+# ---------- COMPILE ----------
 
 app = graph.compile()
 
 
-# ----- RUN -----
+# ---------- RUN ----------
 
 user_input = input("You: ")
 
 result = app.invoke({
-    "message": user_input,
-    "result": None
+    "messages": [
+        HumanMessage(content=user_input)
+    ]
 })
 
-print("Agent:", result["message"])
+
+# ---------- PRINT MESSAGES ----------
+
+print("\n--- Conversation ---")
+
+for message in result["messages"]:
+    print(message)
