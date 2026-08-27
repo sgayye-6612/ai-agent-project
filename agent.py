@@ -1,51 +1,71 @@
-from langchain_core.tools import tool
-from langgraph.graph import StateGraph, START, END
 from typing import TypedDict
+from langgraph.graph import StateGraph, START, END
 
 
 class State(TypedDict):
     message: str
+    result: int | None
 
 
-@tool
+# ----- TOOL -----
+
 def calculator(a: int, b: int) -> int:
-    """Add two numbers together."""
     return a + b
 
 
-def chatbot(state: State):
+# ----- NODES -----
+
+def agent_node(state: State):
+    message = state["message"].lower()
+
+    # Simulate the LLM deciding to use a tool
+    if "add" in message or "calculate" in message:
+        return {
+            "message": message,
+            "result": calculator(10, 20)
+        }
+
     return {
-        "message": state["message"]
+        "message": message,
+        "result": None
     }
 
 
-def calculator_node(state: State):
-    result = calculator.invoke({
-        "a": 10,
-        "b": 20
-    })
+def response_node(state: State):
+
+    if state["result"] is not None:
+        return {
+            "message": f"The answer is {state['result']}",
+            "result": state["result"]
+        }
 
     return {
-        "message": f"Calculator result: {result}"
+        "message": f"I received: {state['message']}",
+        "result": None
     }
 
+
+# ----- GRAPH -----
 
 graph = StateGraph(State)
 
-graph.add_node("chatbot", chatbot)
-graph.add_node("calculator", calculator_node)
+graph.add_node("agent", agent_node)
+graph.add_node("response", response_node)
 
-graph.add_edge(START, "chatbot")
-graph.add_edge("chatbot", "calculator")
-graph.add_edge("calculator", END)
+graph.add_edge(START, "agent")
+graph.add_edge("agent", "response")
+graph.add_edge("response", END)
 
 app = graph.compile()
 
 
+# ----- RUN -----
+
 user_input = input("You: ")
 
 result = app.invoke({
-    "message": user_input
+    "message": user_input,
+    "result": None
 })
 
 print("Agent:", result["message"])
