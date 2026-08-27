@@ -6,60 +6,43 @@ class State(TypedDict):
     message: str
 
 
+# ----- TOOL -----
+
+def calculator(a: int, b: int):
+    return a + b
+
+
+# ----- NODES -----
+
 def chatbot(state: State):
     return {
         "message": state["message"]
     }
 
 
-def response_node(state: State):
+def tool_node(state: State):
+    result = calculator(10, 20)
+
     return {
-        "message": f"Normal response: {state['message']}"
+        "message": f"Calculator result: {result}"
     }
 
 
-def question_node(state: State):
-    return {
-        "message": f"Question detected: {state['message']}"
-    }
-
-
-# Decision function
-def decide_next(state: State):
-    message = state["message"]
-
-    if "?" in message:
-        return "question"
-
-    return "normal"
-
+# ----- GRAPH -----
 
 graph = StateGraph(State)
 
-# Nodes
 graph.add_node("chatbot", chatbot)
-graph.add_node("response", response_node)
-graph.add_node("question", question_node)
+graph.add_node("calculator", tool_node)
 
-# Start
 graph.add_edge(START, "chatbot")
-
-# Conditional edge
-graph.add_conditional_edges(
-    "chatbot",
-    decide_next,
-    {
-        "question": "question",
-        "normal": "response"
-    }
-)
-
-# End
-graph.add_edge("question", END)
-graph.add_edge("response", END)
+graph.add_edge("chatbot", "calculator")
+graph.add_edge("calculator", END)
 
 app = graph.compile()
 
+
+# ----- RUN -----
 
 user_input = input("You: ")
 
