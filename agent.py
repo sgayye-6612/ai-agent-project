@@ -1,7 +1,7 @@
 from typing import Annotated, TypedDict
 
 from langchain_ollama import ChatOllama
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import tool
 
 from langgraph.graph import StateGraph, START, END
@@ -73,14 +73,15 @@ tool_node = ToolNode(tools)
 # ============================================================
 # 6. ROUTING
 # ============================================================
-
 def should_use_tool(state: State):
 
     last_message = state["messages"][-1]
 
     if last_message.tool_calls:
+        print("🔧 ROUTING → TOOLS")
         return "tools"
 
+    print("🏁 ROUTING → END")
     return "end"
 
 
@@ -117,8 +118,40 @@ app = graph.compile()
 # ============================================================
 # 9. USER INPUT
 # ============================================================
+# =========================
+# CHAT LOOP
+# =========================
 
-user_input = input("You: ")
+messages = [
+    SystemMessage(
+        content=(
+            "You are a helpful assistant. "
+            "Use calculator only when the user asks for a mathematical calculation. "
+            "Do not use tools for greetings or normal conversation."
+        )
+    )
+]
+
+while True:
+
+    user_input = input("\nYou: ")
+
+    if user_input.lower() == "exit":
+        break
+
+    messages.append(
+        HumanMessage(content=user_input)
+    )
+
+    result = app.invoke({
+        "messages": messages
+    })
+
+    messages = result["messages"]
+
+    last_message = messages[-1]
+
+    print("AI:", last_message.content)
 
 
 # ============================================================
@@ -128,11 +161,17 @@ user_input = input("You: ")
 result = app.invoke(
     {
         "messages": [
+            SystemMessage(
+                content=(
+                    "You are a helpful assistant. "
+                    "Use calculator only when the user asks for a mathematical calculation. "
+                    "Do not use tools for greetings or normal conversation."
+                )
+            ),
             HumanMessage(content=user_input)
         ]
     }
 )
-
 
 # ============================================================
 # 11. PRINT CONVERSATION
