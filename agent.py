@@ -8,6 +8,7 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 
+from datetime import datetime
 
 # ============================================================
 # 1. STATE
@@ -24,7 +25,10 @@ class State(TypedDict):
 @tool
 def calculator(a: int, b: int) -> int:
     """Add two numbers together."""
-    return a + b
+    try:
+        return a + b
+    except Exception as e:
+        return f"Calculator error: {e}"
 
 
 @tool
@@ -32,9 +36,33 @@ def multiply(a: int, b: int) -> int:
     """Multiply two numbers together."""
     return a * b
 
+@tool
+def subtract(a: int, b: int) -> int:
+    """Subtract b from a."""
+    return a - b
 
-tools = [calculator, multiply]
 
+@tool
+def get_current_time() -> str:
+    """Get the current local time."""
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+@tool
+def divide(a: float, b: float) -> float:
+    """Divide a by b."""
+    if b == 0:
+        raise ValueError("Cannot divide by zero.")
+    
+    return a / b
+
+tools = [
+    calculator,
+    multiply,
+    subtract,
+    divide,
+    get_current_time
+]
 
 # ============================================================
 # 3. LOCAL LLM
@@ -67,7 +95,10 @@ def agent(state: State):
 # 5. TOOL NODE
 # ============================================================
 
-tool_node = ToolNode(tools)
+tool_node = ToolNode(
+    tools,
+    handle_tool_errors=True
+)
 
 
 # ============================================================
