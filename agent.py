@@ -16,6 +16,8 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 
+from rag_tool import search_notes
+
 
 # ============================================================
 # 1. STATE
@@ -50,6 +52,7 @@ def subtract(a: int, b: int) -> int:
 @tool
 def divide(a: float, b: float) -> float:
     """Divide a by b."""
+
     if b == 0:
         raise ValueError("Cannot divide by zero.")
 
@@ -59,8 +62,15 @@ def divide(a: float, b: float) -> float:
 @tool
 def get_current_time() -> str:
     """Get the current local time."""
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+    return datetime.now().strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
+
+
+# ============================================================
+# ALL TOOLS
+# ============================================================
 
 tools = [
     calculator,
@@ -68,6 +78,7 @@ tools = [
     subtract,
     divide,
     get_current_time,
+    search_notes,
 ]
 
 
@@ -95,14 +106,26 @@ Your name is Scooby.
 Answer normally and naturally.
 
 Do not use tools for greetings, names, personal information,
-general conversation, or statements.
+general conversation, or normal statements.
 
-Tools should only be used when the user clearly asks for:
-- addition
-- multiplication
-- subtraction
-- division
-- current time
+Use calculator ONLY when the user asks to add two numbers.
+
+Use multiply ONLY when the user asks to multiply numbers.
+
+Use subtract ONLY when the user asks to subtract numbers.
+
+Use divide ONLY when the user asks to divide numbers.
+
+Use get_current_time ONLY when the user explicitly asks
+for the current time.
+
+Use search_notes when the user asks about information
+contained in their notes or documents.
+
+When search_notes returns information, answer the user's
+question directly using that information. Do not say
+"it seems like you provided" or talk about the retrieval
+process.
 
 Always answer the user after a tool has returned its result.
 """
@@ -115,7 +138,11 @@ Always answer the user after a tool has returned its result.
 def agent(state: State):
 
     response = llm_with_tools.invoke(
-        state["messages"]
+        [
+            SystemMessage(
+                content=SYSTEM_PROMPT
+            )
+        ] + state["messages"]
     )
 
     return {
@@ -130,7 +157,11 @@ def agent(state: State):
 def normal_chat(state: State):
 
     response = llm.invoke(
-        state["messages"]
+        [
+            SystemMessage(
+                content=SYSTEM_PROMPT
+            )
+        ] + state["messages"]
     )
 
     return {
@@ -149,27 +180,41 @@ tool_node = ToolNode(
 
 
 # ============================================================
-# 8. DETECT TOOL REQUEST
+# 8. DETECT CALCULATION / TIME REQUEST
 # ============================================================
 
 def needs_tool(text):
 
     text = text.lower().strip()
 
-    # Time
+    # --------------------------------------------------------
+    # CURRENT TIME
+    # --------------------------------------------------------
+
     time_words = [
         "current time",
         "what time is it",
         "what's the time",
+        "whats the time",
         "time now",
+        "what's time",
+        "time?",
     ]
 
     for word in time_words:
+
         if word in text:
             return True
 
-    # Must contain numbers for mathematical operations
-    numbers = re.findall(r"\d+(?:\.\d+)?", text)
+
+    # --------------------------------------------------------
+    # MATH
+    # --------------------------------------------------------
+
+    numbers = re.findall(
+        r"\d+(?:\.\d+)?",
+        text
+    )
 
     if len(numbers) >= 2:
 
@@ -193,8 +238,10 @@ def needs_tool(text):
         ]
 
         for word in math_words:
+
             if word in text:
                 return True
+
 
     return False
 
@@ -207,11 +254,48 @@ def route_input(state: State):
 
     last_message = state["messages"][-1]
 
-    if needs_tool(last_message.content):
+    text = last_message.content.lower().strip()
+
+
+    # --------------------------------------------------------
+    # MATH / TIME
+    # --------------------------------------------------------
+
+    if needs_tool(text):
 
         print("🔧 ROUTING → AGENT")
 
         return "agent"
+
+
+    # --------------------------------------------------------
+    # NOTES / DOCUMENTS
+    # --------------------------------------------------------
+
+    rag_words = [
+        "notes",
+        "note",
+        "document",
+        "documents",
+        "my goal",
+        "according to my notes",
+        "what did i put",
+        "what did i write",
+        "what does my note say",
+    ]
+
+    for word in rag_words:
+
+        if word in text:
+
+            print("📚 ROUTING → RAG")
+
+            return "agent"
+
+
+    # --------------------------------------------------------
+    # NORMAL CHAT
+    # --------------------------------------------------------
 
     print("💬 ROUTING → NORMAL CHAT")
 
@@ -243,9 +327,23 @@ def should_use_tool(state: State):
 
 graph = StateGraph(State)
 
-graph.add_node("agent", agent)
-graph.add_node("normal", normal_chat)
-graph.add_node("tools", tool_node)
+graph.add_node(
+    "agent",
+    agent
+)
+
+graph.add_node(
+    "normal",
+    normal_chat
+)
+
+graph.add_node(
+    "tools",
+    tool_node
+)
+
+
+# START → first router
 
 graph.add_conditional_edges(
     START,
@@ -256,6 +354,9 @@ graph.add_conditional_edges(
     },
 )
 
+
+# AGENT → tool or END
+
 graph.add_conditional_edges(
     "agent",
     should_use_tool,
@@ -265,10 +366,16 @@ graph.add_conditional_edges(
     },
 )
 
+
+# TOOL → AGENT
+
 graph.add_edge(
     "tools",
     "agent"
 )
+
+
+# NORMAL → END
 
 graph.add_edge(
     "normal",
@@ -396,13 +503,16 @@ while True:
 
     user_input = input("\nYou: ").strip()
 
+
     # --------------------------------------------------------
     # EMPTY INPUT
     # --------------------------------------------------------
 
     if not user_input:
 
-        print("Scooby: Please type something.")
+        print(
+            "Scooby: Please type something."
+        )
 
         continue
 
@@ -415,7 +525,9 @@ while True:
 
         save_memory(memory)
 
-        print("Memory saved. 👋")
+        print(
+            "Memory saved. 👋"
+        )
 
         break
 
@@ -427,21 +539,28 @@ while True:
     if is_scooby_intro(user_input):
 
         response = (
-            "Hi! My name is Scooby, your AI assistant. "
+            "Hi! My name is Scooby, "
+            "your AI assistant. "
             "How can I help you?"
         )
 
-        print("\nAI:", response)
+        print(
+            "\nAI:",
+            response
+        )
+
 
         memory.append({
             "role": "user",
             "content": user_input
         })
 
+
         memory.append({
             "role": "assistant",
             "content": response
         })
+
 
         save_memory(memory)
 
@@ -478,12 +597,15 @@ while True:
 
 
     # --------------------------------------------------------
-    # GET FINAL ANSWER
+    # FINAL ANSWER
     # --------------------------------------------------------
 
     last_message = messages[-1]
 
-    print("\nAI:", last_message.content)
+    print(
+        "\nAI:",
+        last_message.content
+    )
 
 
     # --------------------------------------------------------
@@ -495,10 +617,11 @@ while True:
         "content": user_input
     })
 
+
     memory.append({
         "role": "assistant",
         "content": last_message.content
     })
 
-    save_memory(memory)
 
+    save_memory(memory)
