@@ -5,12 +5,19 @@ from langchain_chroma import Chroma
 from langchain_core.tools import tool
 
 
-# 1. Load document
+# ============================================================
+# LOAD NOTES
+# ============================================================
+
 loader = TextLoader("notes.txt")
+
 documents = loader.load()
 
 
-# 2. Split document
+# ============================================================
+# SPLIT DOCUMENT
+# ============================================================
+
 splitter = RecursiveCharacterTextSplitter(
     chunk_size=100,
     chunk_overlap=20
@@ -19,13 +26,19 @@ splitter = RecursiveCharacterTextSplitter(
 chunks = splitter.split_documents(documents)
 
 
-# 3. Create embeddings
+# ============================================================
+# EMBEDDINGS
+# ============================================================
+
 embeddings = HuggingFaceEmbeddings(
     model_name="sentence-transformers/all-MiniLM-L6-v2"
 )
 
 
-# 4. Create vector store
+# ============================================================
+# VECTOR STORE
+# ============================================================
+
 vector_store = Chroma.from_documents(
     documents=chunks,
     embedding=embeddings,
@@ -33,18 +46,23 @@ vector_store = Chroma.from_documents(
 )
 
 
-# 5. RAG tool
+# ============================================================
+# RETRIEVAL TOOL
+# ============================================================
+
 @tool
 def search_notes(question: str) -> str:
-    """Search Sahithi's notes for relevant information."""
+    """Search Sahithi's notes for information about her goals, learning, skills, name, and personal notes."""
 
     results = vector_store.similarity_search(
         question,
-        k=2
+        k=3
     )
+
+    if not results:
+        return "No relevant information found."
 
     return "\n\n".join(
         document.page_content
         for document in results
     )
-
