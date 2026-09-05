@@ -202,8 +202,14 @@ def parse_math(text: str):
     word_patterns = [
         (r"(-?\d+(?:\.\d+)?)\s+plus\s+(-?\d+(?:\.\d+)?)", "+"),
         (r"(-?\d+(?:\.\d+)?)\s+minus\s+(-?\d+(?:\.\d+)?)", "-"),
-        (r"(-?\d+(?:\.\d+)?)\s+(?:times|multiplied by)\s+(-?\d+(?:\.\d+)?)", "*"),
-        (r"(-?\d+(?:\.\d+)?)\s+(?:divided by|divide by)\s+(-?\d+(?:\.\d+)?)", "/"),
+        (
+            r"(-?\d+(?:\.\d+)?)\s+(?:times|multiplied by)\s+(-?\d+(?:\.\d+)?)",
+            "*"
+        ),
+        (
+            r"(-?\d+(?:\.\d+)?)\s+(?:divided by|divide by)\s+(-?\d+(?:\.\d+)?)",
+            "/"
+        ),
     ]
 
     for pattern, operator in word_patterns:
@@ -364,7 +370,10 @@ def needs_time(text: str) -> bool:
         "what time",
     ]
 
-    return any(phrase in text for phrase in time_phrases)
+    return any(
+        phrase in text
+        for phrase in time_phrases
+    )
 
 
 # ============================================================
@@ -629,47 +638,106 @@ for item in memory:
 
 
 # ============================================================
-# 19. CHAT LOOP
+# 19. TERMINAL CHAT
 # ============================================================
 
-while True:
+def run_terminal_chat():
 
-    user_input = input("\nYou: ").strip()
+    global messages
 
-    # --------------------------------------------------------
-    # EMPTY INPUT
-    # --------------------------------------------------------
+    while True:
 
-    if not user_input:
+        user_input = input("\nYou: ").strip()
 
-        print("Scooby: Please type something.")
+        # ----------------------------------------------------
+        # EMPTY INPUT
+        # ----------------------------------------------------
 
-        continue
+        if not user_input:
 
-    # --------------------------------------------------------
-    # EXIT
-    # --------------------------------------------------------
+            print("Scooby: Please type something.")
 
-    if user_input.lower() == "exit":
+            continue
 
-        save_memory(memory)
+        # ----------------------------------------------------
+        # EXIT
+        # ----------------------------------------------------
 
-        print("Memory saved. 👋")
+        if user_input.lower() == "exit":
 
-        break
+            save_memory(memory)
 
-    # --------------------------------------------------------
-    # SCOOBY INTRO
-    # --------------------------------------------------------
+            print("Memory saved. 👋")
 
-    if is_scooby_intro(user_input):
+            break
 
-        response = (
-            "Hi! My name is Scooby, your AI assistant. "
-            "How can I help you?"
+        # ----------------------------------------------------
+        # SCOOBY INTRO
+        # ----------------------------------------------------
+
+        if is_scooby_intro(user_input):
+
+            response = (
+                "Hi! My name is Scooby, your AI assistant. "
+                "How can I help you?"
+            )
+
+            print("\nAI:", response)
+
+            memory.append({
+                "role": "user",
+                "content": user_input
+            })
+
+            memory.append({
+                "role": "assistant",
+                "content": response
+            })
+
+            save_memory(memory)
+
+            continue
+
+        # ----------------------------------------------------
+        # ADD USER MESSAGE
+        # ----------------------------------------------------
+
+        messages.append(
+            HumanMessage(
+                content=user_input
+            )
         )
 
-        print("\nAI:", response)
+        # ----------------------------------------------------
+        # RUN GRAPH
+        # ----------------------------------------------------
+
+        result = app.invoke(
+            {
+                "messages": messages
+            }
+        )
+
+        # ----------------------------------------------------
+        # UPDATE HISTORY
+        # ----------------------------------------------------
+
+        messages = result["messages"]
+
+        # ----------------------------------------------------
+        # FINAL ANSWER
+        # ----------------------------------------------------
+
+        last_message = messages[-1]
+
+        print(
+            "\nAI:",
+            last_message.content
+        )
+
+        # ----------------------------------------------------
+        # SAVE MEMORY
+        # ----------------------------------------------------
 
         memory.append({
             "role": "user",
@@ -678,62 +746,15 @@ while True:
 
         memory.append({
             "role": "assistant",
-            "content": response
+            "content": last_message.content
         })
 
         save_memory(memory)
 
-        continue
 
-    # --------------------------------------------------------
-    # ADD USER MESSAGE
-    # --------------------------------------------------------
+# ============================================================
+# 20. RUN TERMINAL ONLY WHEN FILE IS EXECUTED DIRECTLY
+# ============================================================
 
-    messages.append(
-        HumanMessage(
-            content=user_input
-        )
-    )
-
-    # --------------------------------------------------------
-    # RUN GRAPH
-    # --------------------------------------------------------
-
-    result = app.invoke(
-        {
-            "messages": messages
-        }
-    )
-
-    # --------------------------------------------------------
-    # UPDATE HISTORY
-    # --------------------------------------------------------
-
-    messages = result["messages"]
-
-    # --------------------------------------------------------
-    # FINAL ANSWER
-    # --------------------------------------------------------
-
-    last_message = messages[-1]
-
-    print(
-        "\nAI:",
-        last_message.content
-    )
-
-    # --------------------------------------------------------
-    # SAVE MEMORY
-    # --------------------------------------------------------
-
-    memory.append({
-        "role": "user",
-        "content": user_input
-    })
-
-    memory.append({
-        "role": "assistant",
-        "content": last_message.content
-    })
-
-    save_memory(memory)
+if __name__ == "__main__":
+    run_terminal_chat()
