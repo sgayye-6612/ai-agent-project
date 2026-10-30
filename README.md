@@ -1,8 +1,11 @@
 # Scooby – AI Personal Assistant
 
 Scooby is an AI-powered personal assistant built with **Python, FastAPI, LangChain, and React**. It combines conversational AI, intelligent agents, and Retrieval-Augmented Generation (RAG) to provide an interactive assistant experience.
-##LIVE LINK https://ai-agent-project-eta.vercel.app/
+
+Live Demo
+Explore Scooby – AI Personal Assistant
 ![Application View](docs/screenshots/additional-view.png)
+
 ## Features
 - Conversational AI with an interactive chat interface
 - AI agent powered by LangChain and LangGraph
