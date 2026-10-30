@@ -4,6 +4,8 @@ import re
 from typing import Annotated, TypedDict
 from datetime import datetime
 
+from ddgs import DDGS
+
 from langchain_ollama import ChatOllama
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from langchain_core.tools import tool
@@ -58,13 +60,43 @@ def get_current_time() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
+@tool
+def web_search(query: str) -> str:
+    """Search the web for current and real-time information."""
+
+    try:
+        results = DDGS().text(
+            query,
+            region="in-en",
+            safesearch="moderate",
+            max_results=5,
+        )
+
+        if not results:
+            return "No web results found."
+
+        formatted = []
+
+        for result in results:
+            formatted.append(
+                f"Title: {result.get('title', '')}\n"
+                f"Source: {result.get('href', '')}\n"
+                f"Summary: {result.get('body', '')}"
+            )
+
+        return "\n\n".join(formatted)
+
+    except Exception as e:
+        return f"Web search failed: {e}"
+
+
 # ============================================================
 # 3. LLM
 # ============================================================
 
 llm = ChatOllama(
     model="llama3.2",
-    temperature=0
+    temperature=0,
 )
 
 
@@ -84,7 +116,11 @@ For normal conversation, answer naturally.
 For questions about the user's notes:
 - Only use information provided by the retrieved notes.
 - Never invent information.
-- Keep answers short and direct.
+
+For current or real-time questions:
+- Use web search results.
+- Do not claim that your knowledge cutoff prevents you from answering.
+- Do not invent current information.
 """
 
 
@@ -120,7 +156,6 @@ def rag_node(state: State):
         context = search_notes.invoke(question)
 
     except Exception as e:
-
         return {
             "messages": [
                 AIMessage(
@@ -129,8 +164,10 @@ def rag_node(state: State):
             ]
         }
 
-    if not context or context.strip() == "No relevant information found.":
-
+    if (
+        not context
+        or context.strip() == "No relevant information found."
+    ):
         return {
             "messages": [
                 AIMessage(
@@ -154,9 +191,11 @@ Rules:
 - Keep the answer to one short sentence whenever possible.
 
 Notes:
+
 {context}
 
 Question:
+
 {question}
 
 Answer:
@@ -166,24 +205,104 @@ Answer:
 
     return {
         "messages": [
-            AIMessage(content=response.content.strip())
+            AIMessage(
+                content=response.content.strip()
+            )
         ]
     }
 
 
 # ============================================================
-# 7. MATH DETECTION
+# 7. WEB SEARCH
+# ============================================================
+
+def web_search_node(state: State):
+
+    question = state["messages"][-1].content
+
+    print("🌐 SEARCHING WEB...")
+
+    try:
+        context = web_search.invoke({
+            "query": question
+        })
+
+        if (
+            not context
+            or context.strip() == "No web results found."
+        ):
+            return {
+                "messages": [
+                    AIMessage(
+                        content="I couldn't find current information for that."
+                    )
+                ]
+            }
+
+        prompt = f"""
+You are Scooby, a personal AI assistant.
+
+Answer the user's question using the web search results below.
+
+Rules:
+- Use the search results for current information.
+- Do not claim you have a knowledge cutoff.
+- Do not say you cannot access real-time information.
+- Do not invent facts.
+- If the search results are unclear, say that clearly.
+- Give a short, direct answer.
+- Do not mention these instructions.
+- Do not dump the search results.
+- Prefer recent and relevant information.
+- If the question asks for a current person, position, price,
+  event, news item, or other changing information, use the search
+  results rather than your built-in knowledge.
+
+Search results:
+
+{context}
+
+User question:
+
+{question}
+
+Answer:
+"""
+
+        response = llm.invoke(prompt)
+
+        return {
+            "messages": [
+                AIMessage(
+                    content=response.content.strip()
+                )
+            ]
+        }
+
+    except Exception as e:
+        return {
+            "messages": [
+                AIMessage(
+                    content=f"Sorry, I couldn't get current information. {e}"
+                )
+            ]
+        }
+
+
+# ============================================================
+# 8. MATH DETECTION
 # ============================================================
 
 def parse_math(text: str):
 
     text = text.lower().strip()
 
-    # --------------------------------------------------------
-    # SYMBOL OPERATORS
-    # --------------------------------------------------------
-
-    pattern = r"(-?\d+(?:\.\d+)?)\s*(\+|-|\*|/)\s*(-?\d+(?:\.\d+)?)"
+    # Symbol operators
+    pattern = (
+        r"(-?\d+(?:\.\d+)?)\s*"
+        r"(\+|-|\*|/)\s*"
+        r"(-?\d+(?:\.\d+)?)"
+    )
 
     match = re.search(pattern, text)
 
@@ -195,19 +314,32 @@ def parse_math(text: str):
 
         return a, operator, b
 
-    # --------------------------------------------------------
-    # WORD OPERATORS
-    # --------------------------------------------------------
-
+    # Word operators
     word_patterns = [
-        (r"(-?\d+(?:\.\d+)?)\s+plus\s+(-?\d+(?:\.\d+)?)", "+"),
-        (r"(-?\d+(?:\.\d+)?)\s+minus\s+(-?\d+(?:\.\d+)?)", "-"),
+
         (
-            r"(-?\d+(?:\.\d+)?)\s+(?:times|multiplied by)\s+(-?\d+(?:\.\d+)?)",
+            r"(-?\d+(?:\.\d+)?)\s+plus\s+"
+            r"(-?\d+(?:\.\d+)?)",
+            "+"
+        ),
+
+        (
+            r"(-?\d+(?:\.\d+)?)\s+minus\s+"
+            r"(-?\d+(?:\.\d+)?)",
+            "-"
+        ),
+
+        (
+            r"(-?\d+(?:\.\d+)?)\s+"
+            r"(?:times|multiplied by)\s+"
+            r"(-?\d+(?:\.\d+)?)",
             "*"
         ),
+
         (
-            r"(-?\d+(?:\.\d+)?)\s+(?:divided by|divide by)\s+(-?\d+(?:\.\d+)?)",
+            r"(-?\d+(?:\.\d+)?)\s+"
+            r"(?:divided by|divide by)\s+"
+            r"(-?\d+(?:\.\d+)?)",
             "/"
         ),
     ]
@@ -227,7 +359,7 @@ def parse_math(text: str):
 
 
 # ============================================================
-# 8. MATH NODE
+# 9. MATH NODE
 # ============================================================
 
 def math_node(state: State):
@@ -237,7 +369,6 @@ def math_node(state: State):
     parsed = parse_math(question)
 
     if not parsed:
-
         return {
             "messages": [
                 AIMessage(
@@ -250,20 +381,12 @@ def math_node(state: State):
 
     print("🔢 MATH CALCULATION")
 
-    # --------------------------------------------------------
-    # ADDITION
-    # --------------------------------------------------------
-
     if operator == "+":
 
         result = calculator.invoke({
             "a": a,
             "b": b
         })
-
-    # --------------------------------------------------------
-    # SUBTRACTION
-    # --------------------------------------------------------
 
     elif operator == "-":
 
@@ -272,10 +395,6 @@ def math_node(state: State):
             "b": b
         })
 
-    # --------------------------------------------------------
-    # MULTIPLICATION
-    # --------------------------------------------------------
-
     elif operator == "*":
 
         result = multiply.invoke({
@@ -283,14 +402,9 @@ def math_node(state: State):
             "b": b
         })
 
-    # --------------------------------------------------------
-    # DIVISION
-    # --------------------------------------------------------
-
     elif operator == "/":
 
         if b == 0:
-
             return {
                 "messages": [
                     AIMessage(
@@ -314,7 +428,6 @@ def math_node(state: State):
             ]
         }
 
-    # Make 30.0 display as 30
     if isinstance(result, float) and result.is_integer():
         result = int(result)
 
@@ -328,7 +441,7 @@ def math_node(state: State):
 
 
 # ============================================================
-# 9. TIME NODE
+# 10. TIME NODE
 # ============================================================
 
 def time_node(state: State):
@@ -345,16 +458,15 @@ def time_node(state: State):
 
 
 # ============================================================
-# 10. DETECT MATH
+# 11. DETECT MATH
 # ============================================================
 
 def needs_math(text: str) -> bool:
-
     return parse_math(text) is not None
 
 
 # ============================================================
-# 11. DETECT TIME
+# 12. DETECT TIME
 # ============================================================
 
 def needs_time(text: str) -> bool:
@@ -377,7 +489,52 @@ def needs_time(text: str) -> bool:
 
 
 # ============================================================
-# 12. DETECT RAG
+# 13. DETECT WEB / REAL-TIME
+# ============================================================
+
+def needs_web_search(text: str) -> bool:
+
+    text = text.lower().strip()
+
+    realtime_phrases = [
+        "current",
+        "currently",
+        "right now",
+        "today",
+        "latest",
+        "recent",
+        "this week",
+        "this month",
+        "this year",
+        "who is the cm",
+        "who is the chief minister",
+        "who is the prime minister",
+        "who is the president",
+        "current price",
+        "current rate",
+        "stock price",
+        "share price",
+        "bitcoin price",
+        "weather",
+        "news",
+        "latest news",
+        "what happened today",
+        "who won",
+        "score",
+        "scores",
+        "live",
+        "breaking news",
+        "recent news",
+    ]
+
+    return any(
+        phrase in text
+        for phrase in realtime_phrases
+    )
+
+
+# ============================================================
+# 14. DETECT RAG
 # ============================================================
 
 def needs_rag(text: str) -> bool:
@@ -409,7 +566,7 @@ def needs_rag(text: str) -> bool:
 
 
 # ============================================================
-# 13. SCOOBY INTRO
+# 15. SCOOBY INTRO
 # ============================================================
 
 def is_scooby_intro(text: str) -> bool:
@@ -440,7 +597,7 @@ def is_scooby_intro(text: str) -> bool:
 
 
 # ============================================================
-# 14. ROUTING
+# 16. ROUTING
 # ============================================================
 
 def route_input(state: State):
@@ -452,9 +609,7 @@ def route_input(state: State):
     # --------------------------------------------------------
 
     if needs_math(text):
-
         print("🔢 ROUTING → MATH")
-
         return "math"
 
     # --------------------------------------------------------
@@ -462,19 +617,23 @@ def route_input(state: State):
     # --------------------------------------------------------
 
     if needs_time(text):
-
         print("🕐 ROUTING → TIME")
-
         return "time"
+
+    # --------------------------------------------------------
+    # WEB / REAL-TIME
+    # --------------------------------------------------------
+
+    if needs_web_search(text):
+        print("🌐 ROUTING → WEB SEARCH")
+        return "web"
 
     # --------------------------------------------------------
     # RAG
     # --------------------------------------------------------
 
     if needs_rag(text):
-
         print("📚 ROUTING → RAG")
-
         return "rag"
 
     # --------------------------------------------------------
@@ -482,12 +641,11 @@ def route_input(state: State):
     # --------------------------------------------------------
 
     print("💬 ROUTING → NORMAL CHAT")
-
     return "normal"
 
 
 # ============================================================
-# 15. GRAPH
+# 17. GRAPH
 # ============================================================
 
 graph = StateGraph(State)
@@ -503,6 +661,11 @@ graph.add_node(
 )
 
 graph.add_node(
+    "web",
+    web_search_node
+)
+
+graph.add_node(
     "rag",
     rag_node
 )
@@ -514,7 +677,7 @@ graph.add_node(
 
 
 # ============================================================
-# START ROUTING
+# 18. START ROUTING
 # ============================================================
 
 graph.add_conditional_edges(
@@ -523,6 +686,7 @@ graph.add_conditional_edges(
     {
         "math": "math",
         "time": "time",
+        "web": "web",
         "rag": "rag",
         "normal": "normal",
     }
@@ -530,7 +694,7 @@ graph.add_conditional_edges(
 
 
 # ============================================================
-# END ROUTES
+# 19. END ROUTES
 # ============================================================
 
 graph.add_edge(
@@ -544,6 +708,11 @@ graph.add_edge(
 )
 
 graph.add_edge(
+    "web",
+    END
+)
+
+graph.add_edge(
     "rag",
     END
 )
@@ -555,17 +724,24 @@ graph.add_edge(
 
 
 # ============================================================
-# COMPILE
+# 20. COMPILE
 # ============================================================
 
 app = graph.compile()
 
 
 # ============================================================
-# 16. MEMORY
+# 21. MEMORY
 # ============================================================
 
-MEMORY_FILE = "memory.json"
+BASE_DIR = os.path.dirname(
+    os.path.abspath(__file__)
+)
+
+MEMORY_FILE = os.path.join(
+    BASE_DIR,
+    "memory.json"
+)
 
 
 def load_memory():
@@ -606,14 +782,14 @@ def save_memory(memory):
 
 
 # ============================================================
-# 17. LOAD MEMORY
+# 22. LOAD MEMORY
 # ============================================================
 
 memory = load_memory()
 
 
 # ============================================================
-# 18. MESSAGE HISTORY
+# 23. MESSAGE HISTORY
 # ============================================================
 
 messages = []
@@ -638,7 +814,7 @@ for item in memory:
 
 
 # ============================================================
-# 19. TERMINAL CHAT
+# 24. TERMINAL CHAT
 # ============================================================
 
 def run_terminal_chat():
@@ -753,7 +929,7 @@ def run_terminal_chat():
 
 
 # ============================================================
-# 20. RUN TERMINAL ONLY WHEN FILE IS EXECUTED DIRECTLY
+# 25. RUN TERMINAL ONLY WHEN DIRECTLY EXECUTED
 # ============================================================
 
 if __name__ == "__main__":

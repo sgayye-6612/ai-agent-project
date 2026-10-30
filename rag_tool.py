@@ -9,7 +9,12 @@ from langchain_core.tools import tool
 # LOAD NOTES
 # ============================================================
 
-loader = TextLoader("notes.txt")
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent
+NOTES_FILE = BASE_DIR / "notes.txt"
+
+loader = TextLoader(str(NOTES_FILE), encoding="utf-8")
 
 documents = loader.load()
 

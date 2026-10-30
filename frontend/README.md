@@ -1,32 +1,130 @@
-# React + TypeScript + Vite
+# Scooby — AI Personal Assistant
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Scooby is a personal AI assistant built with Python, FastAPI, LangChain, LangGraph, and React. It provides a conversational interface for interacting with an AI agent and exploring assistant capabilities such as question answering, calculations, and retrieval-augmented generation (RAG).
 
-Currently, two official plugins are available:
+## Screenshots
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+### Welcome Screen
+![Scooby Welcome Screen](docs/screenshots/welcome-screen.png)
 
-## React Compiler
+### Chat Interface
+![Scooby Chat Interface](docs/screenshots/chat-interface.png)
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### Assistant Response
+![Scooby Assistant Response](docs/screenshots/assistant-response.png)
 
-## Expanding the Oxlint configuration
+### Additional View
+![Scooby Additional View](docs/screenshots/additional-view.png)
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+## Features
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+- Conversational AI assistant
+- React and TypeScript frontend
+- FastAPI backend
+- LangChain and LangGraph agent integration
+- Retrieval-augmented generation (RAG)
+- Local LLM support using Ollama
+- Chroma vector database for knowledge retrieval
+- API documentation through Swagger UI
+
+## Tech Stack
+
+**Frontend**
+- React
+- TypeScript
+- Vite
+- CSS
+- Three.js / React Three Fiber
+
+**Backend**
+- Python
+- FastAPI
+- LangChain
+- LangGraph
+- Ollama
+- ChromaDB
+
+## Project Structure
+
+```text
+ai-agent-project/
+├── backend/
+│   └── main.py
+├── frontend/
+│   ├── src/
+│   ├── package.json
+│   └── index.html
+├── docs/
+│   └── screenshots/
+├── agent.py
+├── rag.py
+├── rag_tool.py
+├── notes.txt
+└── README.md
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## Getting Started
+
+### 1. Clone the repository
+
+```bash
+git clone YOUR_REPOSITORY_URL
+cd ai-agent-project
+```
+
+### 2. Set up the Python environment
+
+```bash
+python -m venv .venv
+```
+
+Activate it on Windows:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+Install backend dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+### 3. Start the backend
+
+```bash
+cd backend
+uvicorn main:app --reload
+```
+
+Backend: `http://127.0.0.1:8000`
+
+API documentation: `http://127.0.0.1:8000/docs`
+
+### 4. Start the frontend
+
+Open another terminal:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open the local URL displayed by Vite.
+
+## Future Improvements
+
+- Persistent conversation history
+- Improved RAG document ingestion
+- Additional AI tools and agent capabilities
+- Enhanced 3D assistant interactions
+- Better error handling and deployment support
+
+## Author
+
+**Sahithi Gayye**
+
+AI Engineer | Full Stack Developer
+
+[GitHub](https://github.com/sgayye-6612)
