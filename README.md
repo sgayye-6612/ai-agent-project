@@ -19,10 +19,13 @@ Scooby is an AI-powered personal assistant built with **Python, FastAPI, LangCha
 **AI & Data:** Ollama, ChromaDB, RAG
 
 ## Screenshots
-"C:\Users\visha\OneDrive\Pictures\Screenshots\Screenshot 2026-10-30 104819.png"
-"C:\Users\visha\OneDrive\Pictures\Screenshots\Screenshot 2026-10-30 104943.png"
-"C:\Users\visha\OneDrive\Pictures\Screenshots\Screenshot 2026-10-30 105236.png"
-"C:\Users\visha\OneDrive\Pictures\Screenshots\Screenshot 2026-10-30 105357.png"
+
+![Scooby – Application View](docs/screenshots/additional-view.png)
+![Scooby – Welcome Screen](docs/screenshots/welcome-screen.png)
+
+![Scooby – Chat Interface](docs/screenshots/chat-interface.png)
+
+![Scooby – AI Response](docs/screenshots/assistant-response.png)
 
 
 ## Run Locally
